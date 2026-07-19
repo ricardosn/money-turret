@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Banco SQLite (persistido localmente, fora do versionamento)
+backend/data/*.db
+backend/data/*.db-*
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+
+# Ambiente
+.env
+CLAUDE.md:Zone.Identifier

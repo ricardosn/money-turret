@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile backend/app/database.py backend/app/models.py backend/app/main.py backend/seed.py)",
+      "Bash(docker compose *)",
+      "Bash(python3 -m py_compile backend/app/models.py backend/seed.py)",
+      "Bash(python3 -c \"import sqlalchemy; print\\('sqlalchemy', sqlalchemy.__version__\\)\")",
+      "Bash(docker exec money-turret-backend *)",
+      "Skill(claude-api)",
+      "Bash(curl -sf http://localhost:8000/health)",
+      "Bash(curl -s -X POST http://localhost:8000/categorization/run)",
+      "Bash(curl -s http://localhost:8000/categorization/rules)",
+      "Bash(curl -s http://localhost:8000/analytics/fixed-vs-variable)",
+      "Bash(curl -s http://localhost:8000/analytics/category-cohort)",
+      "Bash(curl -s -X POST http://localhost:8000/categorization/llm)",
+      "Bash(curl -s \"http://localhost:8000/transactions?limit=3\")",
+      "Bash(curl -s \"http://localhost:8000/transactions?search=ludo\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['total'], [i['description'] for i in d['items']]\\)\")",
+      "Bash(curl -s http://localhost:8000/categories)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['total'], [i['category_name'] for i in d['items']]\\)\")",
+      "Bash(curl -s \"http://localhost:8000/transactions?date_from=2026-07-02&date_to=2026-07-03&uncategorized=true\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['total'], [\\(str\\(i['occurred_at']\\), i['description']\\) for i in d['items']]\\)\")",
+      "Bash(curl -s http://localhost:8000/analytics/category-share)",
+      "Bash(curl -s \"http://localhost:8000/analytics/category-share?month=2026-07\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total', d['total'], 'soma %:', sum\\(i['percentage'] for i in d['items']\\)\\)\")",
+      "Bash(curl -s \"http://localhost:8000/analytics/category-share?month=2020-01\")",
+      "Bash(curl -s -o /tmp/mt-home.html -w '%{http_code}' http://localhost:3000)",
+      "Bash(docker exec *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(curl -s -o /dev/null -w 'HTTP %{http_code}\\\\n' http://localhost:3000)",
+      "Bash(curl -s -o /tmp/mt-up.html -w '%{http_code}' http://localhost:3000/upload)",
+      "Bash(curl -s -F \"file=@/tmp/mt-test/conta.csv\" -H \"Origin: http://localhost:3000\" -D - -o /dev/null http://localhost:8000/statements/upload)",
+      "Bash(curl -s -o /dev/null -w 'health: %{http_code}\\\\n' http://localhost:8000/health)",
+      "Bash(curl -s \"http://localhost:8000/transactions?uncategorized=true&exclude_internal=true&limit=5\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['total'], [\\(i['id'], i['description']\\) for i in d['items']]\\)\")"
+    ]
+  }
+}

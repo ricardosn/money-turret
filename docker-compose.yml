@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: ./backend
+    container_name: money-turret-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/finance.db
+      # Necessária para a categorização via LLM (POST /categorization/llm)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      # Código-fonte montado para hot-reload do uvicorn em desenvolvimento
+      - ./backend:/app
+      # Persistência do SQLite: o banco vive no host em ./backend/data
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: money-turret-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      # Evita que o node_modules do host sobrescreva o instalado na imagem
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped

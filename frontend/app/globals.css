@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-feature-settings: "tnum" 1;
+  }
+
+  ::selection {
+    @apply bg-blue-500/30;
+  }
+
+  * {
+    scrollbar-color: theme("colors.slate.700") theme("colors.slate.900");
+    scrollbar-width: thin;
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
+  }
+}

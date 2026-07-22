@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Bar,
@@ -15,6 +14,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AlertTriangle } from "lucide-react";
+import { cardClass, inputClass } from "@/lib/ui";
 
 const API_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -50,14 +51,14 @@ interface CategoryShare {
 }
 
 const PIE_COLORS = [
-  "#3d8bfd",
-  "#e07a5f",
-  "#5fb878",
-  "#f2cc60",
-  "#9b72cf",
-  "#4ecdc4",
-  "#e56399",
-  "#8d99ae",
+  "#60a5fa",
+  "#f87171",
+  "#4ade80",
+  "#fbbf24",
+  "#c084fc",
+  "#2dd4bf",
+  "#f472b6",
+  "#94a3b8",
 ];
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -65,20 +66,46 @@ const brl = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+const tooltipStyle: React.CSSProperties = {
+  background: "#1e293b",
+  border: "1px solid #334155",
+  borderRadius: 8,
+  color: "#e2e8f0",
+  fontSize: "0.85rem",
+};
+
+function SectionHeading({ children }: { children: ReactNode }): ReactNode {
+  return (
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+      {children}
+    </h2>
+  );
+}
+
 function FixedVariableChart({ data }: { data: ChartPoint[] }): ReactNode {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-        <XAxis dataKey="month" stroke="#aaa" />
-        <YAxis stroke="#aaa" tickFormatter={(v: number) => brl.format(v)} width={100} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+        <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+        <YAxis
+          stroke="#64748b"
+          fontSize={12}
+          tickFormatter={(v: number) => brl.format(v)}
+          width={100}
+        />
         <Tooltip
           formatter={(value) => brl.format(Number(value))}
-          contentStyle={{ background: "#1c1c1e", border: "1px solid #444" }}
+          contentStyle={tooltipStyle}
         />
-        <Legend />
-        <Bar dataKey="fixo" stackId="a" name="Custo fixo" fill="#e07a5f" />
-        <Bar dataKey="variavel" stackId="a" name="Custo variável" fill="#3d8bfd" />
+        <Legend wrapperStyle={{ fontSize: "0.8rem", color: "#94a3b8" }} />
+        <Bar dataKey="fixo" stackId="a" name="Custo fixo" fill="#f87171" />
+        <Bar
+          dataKey="variavel"
+          stackId="a"
+          name="Custo variável"
+          fill="#60a5fa"
+        />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -93,43 +120,52 @@ function CohortHeatmap({ cells }: { cells: CohortCell[] }): ReactNode {
   const max = Math.max(...cells.map((c) => Number(c.total)), 1);
 
   return (
-    <table style={{ borderCollapse: "collapse", width: "100%" }}>
-      <thead>
-        <tr>
-          <th style={cellStyle}>Categoria</th>
-          {months.map((m) => (
-            <th key={m} style={cellStyle}>
-              {m}
+    <div className="overflow-x-auto rounded-md border border-slate-800">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            <th className="sticky left-0 border-b border-slate-800 bg-slate-900 px-3 py-2 text-left font-medium text-slate-400">
+              Categoria
             </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {categories.map((cat) => (
-          <tr key={cat}>
-            <td style={{ ...cellStyle, textAlign: "left" }}>{cat}</td>
-            {months.map((m) => {
-              const v = value.get(`${m}|${cat}`);
-              const intensity = v ? 0.15 + 0.85 * (v / max) : 0;
-              return (
-                <td
-                  key={m}
-                  style={{
-                    ...cellStyle,
-                    background: v
-                      ? `rgba(224, 122, 95, ${intensity.toFixed(2)})`
-                      : "transparent",
-                  }}
-                  title={v ? brl.format(v) : "—"}
-                >
-                  {v ? brl.format(v) : "—"}
-                </td>
-              );
-            })}
+            {months.map((m) => (
+              <th
+                key={m}
+                className="border-b border-slate-800 px-3 py-2 text-center font-medium text-slate-400"
+              >
+                {m}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {categories.map((cat) => (
+            <tr key={cat}>
+              <td className="sticky left-0 whitespace-nowrap border-b border-slate-800/70 bg-slate-950 px-3 py-1.5 text-left text-slate-300">
+                {cat}
+              </td>
+              {months.map((m) => {
+                const v = value.get(`${m}|${cat}`);
+                const intensity = v ? 0.15 + 0.85 * (v / max) : 0;
+                return (
+                  <td
+                    key={m}
+                    className="border-b border-slate-800/70 px-3 py-1.5 text-right tabular-nums text-slate-200"
+                    style={{
+                      background: v
+                        ? `rgba(96, 165, 250, ${intensity.toFixed(2)})`
+                        : "transparent",
+                    }}
+                    title={v ? brl.format(v) : "—"}
+                  >
+                    {v ? brl.format(v) : "—"}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -165,20 +201,12 @@ function CategoryShareChart({ share }: { share: CategoryShare }): ReactNode {
           formatter={(value, _name, item) => [
             `${brl.format(Number(value))} (${item?.payload?.percentage}%)`,
           ]}
-          contentStyle={{ background: "#1c1c1e", border: "1px solid #444" }}
+          contentStyle={tooltipStyle}
         />
       </PieChart>
     </ResponsiveContainer>
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  border: "1px solid #333",
-  padding: "0.4rem 0.6rem",
-  textAlign: "right",
-  fontVariantNumeric: "tabular-nums",
-  fontSize: "0.85rem",
-};
 
 export default function HomePage(): ReactNode {
   const [fixedVariable, setFixedVariable] = useState<ChartPoint[] | null>(null);
@@ -229,57 +257,46 @@ export default function HomePage(): ReactNode {
     : [];
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        padding: "2rem",
-        maxWidth: 1100,
-        margin: "0 auto",
-        background: "#111",
-        color: "#eee",
-        minHeight: "100vh",
-      }}
-    >
-      <h1>Money Turret</h1>
-      <nav style={{ marginBottom: "1rem", display: "flex", gap: "1rem" }}>
-        <Link href="/transactions" style={{ color: "#3d8bfd" }}>
-          Listagem de gastos
-        </Link>
-        <Link href="/upload" style={{ color: "#3d8bfd" }}>
-          Upload de extrato
-        </Link>
-        <Link href="/categorize" style={{ color: "#3d8bfd" }}>
-          Categorizar pendentes
-        </Link>
-      </nav>
-      {error && <p style={{ color: "#e07a5f" }}>{error}</p>}
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Visão consolidada de custos fixos, variáveis e distribuição por
+          categoria.
+        </p>
+      </div>
 
-      <section style={{ marginTop: "2rem" }}>
-        <h2>Custo fixo vs variável (mensal)</h2>
-        {fixedVariable === null ? (
-          <p>Carregando…</p>
-        ) : fixedVariable.length === 0 ? (
-          <p>Sem despesas registradas. Importe um extrato em /statements/upload.</p>
-        ) : (
-          <FixedVariableChart data={fixedVariable} />
-        )}
+      {error && (
+        <div className="flex items-center gap-2 rounded-md border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+          <AlertTriangle size={16} aria-hidden="true" />
+          {error}
+        </div>
+      )}
+
+      <section className={`${cardClass} p-5`}>
+        <SectionHeading>Custo fixo vs variável (mensal)</SectionHeading>
+        <div className="mt-4">
+          {fixedVariable === null ? (
+            <p className="text-sm text-slate-500">Carregando…</p>
+          ) : fixedVariable.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Sem despesas registradas. Importe um extrato em /upload.
+            </p>
+          ) : (
+            <FixedVariableChart data={fixedVariable} />
+          )}
+        </div>
       </section>
 
-      <section style={{ marginTop: "3rem" }}>
-        <h2 style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          Gastos do mês por categoria
+      <section className={`${cardClass} p-5`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeading>Gastos do mês por categoria</SectionHeading>
           {availableMonths.length > 0 && (
             <select
               value={shareMonth}
               onChange={(e) => setShareMonth(e.target.value)}
-              style={{
-                background: "#1c1c1e",
-                color: "#eee",
-                border: "1px solid #444",
-                borderRadius: 4,
-                padding: "0.3rem 0.5rem",
-                fontSize: "1rem",
-              }}
+              className={inputClass}
+              aria-label="Selecionar mês"
             >
               {availableMonths.map((m) => (
                 <option key={m} value={m}>
@@ -288,31 +305,40 @@ export default function HomePage(): ReactNode {
               ))}
             </select>
           )}
-        </h2>
-        {share === null ? (
-          <p>Carregando…</p>
-        ) : share.items.length === 0 ? (
-          <p>Sem despesas no mês selecionado.</p>
-        ) : (
-          <>
-            <p style={{ color: "#999" }}>
-              Total do mês: {brl.format(Number(share.total))}
+        </div>
+        <div className="mt-4">
+          {share === null ? (
+            <p className="text-sm text-slate-500">Carregando…</p>
+          ) : share.items.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Sem despesas no mês selecionado.
             </p>
-            <CategoryShareChart share={share} />
-          </>
-        )}
+          ) : (
+            <>
+              <p className="text-sm text-slate-400">
+                Total do mês:{" "}
+                <span className="font-medium tabular-nums text-slate-200">
+                  {brl.format(Number(share.total))}
+                </span>
+              </p>
+              <CategoryShareChart share={share} />
+            </>
+          )}
+        </div>
       </section>
 
-      <section style={{ marginTop: "3rem" }}>
-        <h2>Coorte de gastos por categoria</h2>
-        {cohort === null ? (
-          <p>Carregando…</p>
-        ) : cohort.length === 0 ? (
-          <p>Sem dados para exibir.</p>
-        ) : (
-          <CohortHeatmap cells={cohort} />
-        )}
+      <section className={`${cardClass} p-5`}>
+        <SectionHeading>Coorte de gastos por categoria</SectionHeading>
+        <div className="mt-4">
+          {cohort === null ? (
+            <p className="text-sm text-slate-500">Carregando…</p>
+          ) : cohort.length === 0 ? (
+            <p className="text-sm text-slate-500">Sem dados para exibir.</p>
+          ) : (
+            <CohortHeatmap cells={cohort} />
+          )}
+        </div>
       </section>
-    </main>
+    </div>
   );
 }

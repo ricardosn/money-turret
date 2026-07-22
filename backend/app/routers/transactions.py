@@ -44,6 +44,8 @@ def list_transactions(
     search: str | None = None,
     uncategorized: bool = False,
     exclude_internal: bool = False,
+    expenses_only: bool = False,
+    incomes_only: bool = False,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -65,6 +67,10 @@ def list_transactions(
             Transaction.description.ilike(pattern)
             | Transaction.raw_description.ilike(pattern)
         )
+    if expenses_only:
+        filters.append(Transaction.amount < 0)
+    if incomes_only:
+        filters.append(Transaction.amount > 0)
     if exclude_internal:
         filters.append(
             Transaction.operation.notin_(INTERNAL_OPERATIONS)

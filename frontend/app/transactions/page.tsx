@@ -58,6 +58,7 @@ export default function TransactionsPage(): ReactNode {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("expenses");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
 
@@ -78,6 +79,8 @@ export default function TransactionsPage(): ReactNode {
     if (search) params.set("search", search);
     if (categoryFilter === "uncategorized") params.set("uncategorized", "true");
     else if (categoryFilter) params.set("category_id", categoryFilter);
+    if (typeFilter === "expenses") params.set("expenses_only", "true");
+    else if (typeFilter === "incomes") params.set("incomes_only", "true");
 
     fetch(`${API_URL}/transactions?${params}`)
       .then((r) => r.json() as Promise<TransactionPage>)
@@ -86,7 +89,7 @@ export default function TransactionsPage(): ReactNode {
         setError(null);
       })
       .catch(() => setError(`Não foi possível carregar a API (${API_URL}).`));
-  }, [dateFrom, dateTo, search, categoryFilter, offset]);
+  }, [dateFrom, dateTo, search, categoryFilter, typeFilter, offset]);
 
   useEffect(() => {
     load();
@@ -153,6 +156,21 @@ export default function TransactionsPage(): ReactNode {
             onChange={(e) => setDateTo(e.target.value)}
             style={inputStyle}
           />
+        </label>
+        <label style={{ display: "grid", gap: 4, fontSize: "0.8rem" }}>
+          Tipo
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setOffset(0);
+            }}
+            style={inputStyle}
+          >
+            <option value="expenses">Gastos</option>
+            <option value="incomes">Entradas</option>
+            <option value="all">Todas</option>
+          </select>
         </label>
         <label style={{ display: "grid", gap: 4, fontSize: "0.8rem" }}>
           Categoria

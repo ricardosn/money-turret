@@ -72,7 +72,7 @@ export default function CategorizePage(): ReactNode {
 
   const load = useCallback(() => {
     fetch(
-      `${API_URL}/transactions?uncategorized=true&exclude_internal=true&limit=${PAGE_SIZE}`,
+      `${API_URL}/transactions?uncategorized=true&exclude_internal=true&expenses_only=true&limit=${PAGE_SIZE}`,
     )
       .then((r) => r.json() as Promise<TransactionPage>)
       .then((p) => {

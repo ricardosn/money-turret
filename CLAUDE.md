@@ -60,12 +60,12 @@ O dashboard deve suportar categorias de "reserva" ou "investimento" atreladas a 
 - Endpoints principais:
   - `POST /statements/upload` — importa CSV (conta ou fatura).
   - `POST /categorization/run` | `POST /categorization/llm` | CRUD em `/categorization/rules`.
-  - `GET /transactions` (filtros: datas, categoria com subárvore, busca, sem categoria, excluir internas; paginado) e `GET /categories`.
+  - `GET /transactions` (filtros: datas, categoria com subárvore, busca, sem categoria, excluir internas, `expenses_only`/`incomes_only`; paginado) e `GET /categories`.
   - `POST /transactions/{id}/categorize` — categorização manual; a palavra-chave vira regra (`source=manual`) e o motor reaplica nas demais pendentes.
   - `GET /analytics/fixed-vs-variable` | `/analytics/category-cohort` | `/analytics/category-share` — agregações mensais, sempre no backend.
 
 ### Frontend (`frontend/app/`)
 - `/` — dashboard: barras empilhadas fixo vs variável, pizza de % por categoria (com seletor de mês) e heatmap de coorte (Recharts).
-- `/transactions` — listagem com filtros de data, categoria e descrição, paginada.
+- `/transactions` — listagem com filtros de data, tipo (Gastos por padrão / Entradas / Todas), categoria e descrição, paginada.
 - `/upload` — envio de extrato com resumo da importação e botão para rodar a categorização.
-- `/categorize` — categorização manual das pendentes: categoria + palavra-chave que vira regra reutilizável.
+- `/categorize` — categorização manual das pendentes (só saídas, sem movimentações internas): categoria + palavra-chave que vira regra reutilizável.

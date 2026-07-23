@@ -42,7 +42,8 @@ O dashboard deve suportar categorias de "reserva" ou "investimento" atreladas a 
 4. ✅ Implementar o motor de regras (Regex) auxiliado por LLM para categorização.
 5. ✅ Desenvolver os gráficos de custo fixo vs. variável e corte de gastos.
 6. ✅ Desenvolver página de listagem de gastos dos extratos com filtros de data, categoria, e descrição.
-7. ✅ Desenvolver os gráficos de pizza de porcentagem de gastos mensais por categoria.
+7. ✅ Desenvolver os gráficos de pizza de porcentagem de gastos mensais por categoria (substituído no passo 8 por gráfico de tendência).
+8. ✅ Identificar transferências internas (fatura própria, RDB, aportes em corretoras) via `is_internal_transfer` e substituir a pizza por gráfico de tendência de estilo de vida.
 
 ## 6. Estado Atual do Sistema
 
@@ -53,19 +54,19 @@ O dashboard deve suportar categorias de "reserva" ou "investimento" atreladas a 
 - Categorização via LLM requer `ANTHROPIC_API_KEY` exportada no host (repassada pelo compose).
 
 ### Backend (`backend/app/`)
-- `models.py`: `Category` (árvore, com `is_fixed` para custo fixo), `Account`, `Transaction`, `CategoryRule` (regex → categoria; `source`: seed/manual/llm).
-- `ingestion.py`: parser dos CSVs do Nubank (conta e fatura, detecção automática), limpeza de descrição, extração do prefixo de operação, dedup por `external_id` (fatura usa hash determinístico com contador de ocorrência) e inversão de sinal da fatura (convenção: negativo = saída).
-- `categorization.py`: motor de regras (primeira regra que casa, por prioridade, case-insensitive) e lista de operações internas (RDB, pagamento de fatura) excluídas das análises.
+- `models.py`: `Category` (árvore, com `is_fixed` para custo fixo), `Account`, `Transaction` (com `is_internal_transfer`), `CategoryRule` (regex → categoria; `source`: seed/manual/llm).
+- `ingestion.py`: parser dos CSVs do Nubank (conta e fatura, detecção automática), limpeza de descrição, extração do prefixo de operação, dedup por `external_id` (fatura usa hash determinístico com contador de ocorrência) e inversão de sinal da fatura (convenção: negativo = saída). `is_internal_transfer()` marca movimentações entre contas do próprio titular: pagamento da própria fatura, aplicação/resgate em RDB e transferências (Pix/TED) para corretoras/plataformas de investimento conhecidas (`INTERNAL_TRANSFER_COUNTERPARTIES`) — excluídas do cálculo de despesa/receita para não distorcer a taxa real de poupança mensal. `main.py` faz backfill automático desse flag em transações já importadas na primeira subida após a migração.
+- `categorization.py`: motor de regras (primeira regra que casa, por prioridade, case-insensitive); `uncategorized_descriptions` já filtra `is_internal_transfer`.
 - `llm.py`: categorização via Claude API (`claude-opus-4-7`, structured outputs, prompt caching na árvore de categorias). Sugestões viram `CategoryRule` com `source=llm` — uploads futuros não chamam o modelo.
 - Endpoints principais:
   - `POST /statements/upload` — importa CSV (conta ou fatura).
   - `POST /categorization/run` | `POST /categorization/llm` | CRUD em `/categorization/rules`.
-  - `GET /transactions` (filtros: datas, categoria com subárvore, busca, sem categoria, excluir internas, `expenses_only`/`incomes_only`; paginado) e `GET /categories`.
+  - `GET /transactions` (filtros: datas, categoria com subárvore, busca, sem categoria, excluir internas via `is_internal_transfer`, `expenses_only`/`incomes_only`; paginado) e `GET /categories`.
   - `POST /transactions/{id}/categorize` — categorização manual; a palavra-chave vira regra (`source=manual`) e o motor reaplica nas demais pendentes.
-  - `GET /analytics/fixed-vs-variable` | `/analytics/category-cohort` | `/analytics/category-share` — agregações mensais, sempre no backend.
+  - `GET /analytics/fixed-vs-variable` (barras empilhadas custo fixo vs variável) | `/analytics/category-cohort` (matriz mês × categoria-raiz) | `/analytics/lifestyle-trend` (série mensal por categoria de estilo de vida — Boardgames, Outdoor / Trilhas, Restaurantes, Churrascarias, Cantinas Italianas, Fast-food — sem herdar de subcategorias, para detectar inflação do padrão de vida) — agregações mensais, sempre no backend, sempre excluindo `is_internal_transfer`.
 
 ### Frontend (`frontend/app/`)
-- `/` — dashboard: barras empilhadas fixo vs variável, pizza de % por categoria (com seletor de mês) e heatmap de coorte (Recharts).
+- `/` — dashboard: barras empilhadas custo fixo vs variável e gráfico de linha de tendência de estilo de vida (Recharts). Sem gráfico de pizza.
 - `/transactions` — listagem com filtros de data, tipo (Gastos por padrão / Entradas / Todas), categoria e descrição, paginada.
 - `/upload` — envio de extrato com resumo da importação e botão para rodar a categorização.
 - `/categorize` — categorização manual das pendentes (só saídas, sem movimentações internas): categoria + palavra-chave que vira regra reutilizável.

@@ -7,8 +7,37 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401  (registra os modelos no metadata)
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
+from app.ingestion import is_internal_transfer
 from app.routers import analytics, categorization, statements, transactions
+
+
+def _backfill_internal_transfers() -> None:
+    """Recalcula is_internal_transfer para transações importadas antes da
+    coluna existir, usando a mesma lógica aplicada na ingestão."""
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            models.Transaction.__table__.select().with_only_columns(
+                models.Transaction.id,
+                models.Transaction.operation,
+                models.Transaction.raw_description,
+                models.Transaction.description,
+            )
+        ).all()
+        for row in rows:
+            flag = is_internal_transfer(
+                row.operation, row.raw_description or row.description
+            )
+            if flag:
+                db.execute(
+                    models.Transaction.__table__.update()
+                    .where(models.Transaction.id == row.id)
+                    .values(is_internal_transfer=True)
+                )
+        db.commit()
+    finally:
+        db.close()
 
 
 def _ensure_schema() -> None:
@@ -23,6 +52,21 @@ def _ensure_schema() -> None:
             conn.exec_driver_sql(
                 "ALTER TABLE categories ADD COLUMN is_fixed BOOLEAN NOT NULL DEFAULT 0"
             )
+
+        tx_columns = {
+            row[1] for row in conn.exec_driver_sql("PRAGMA table_info(transactions)")
+        }
+        if "is_internal_transfer" not in tx_columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE transactions ADD COLUMN is_internal_transfer "
+                "BOOLEAN NOT NULL DEFAULT 0"
+            )
+            needs_backfill = True
+        else:
+            needs_backfill = False
+
+    if needs_backfill:
+        _backfill_internal_transfers()
 
 
 @asynccontextmanager

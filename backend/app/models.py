@@ -110,9 +110,11 @@ class Transaction(Base):
     `description` guarda a versão limpa (contraparte/estabelecimento) e
     `operation` o tipo de operação que o Nubank embute como prefixo da
     descrição (ex: "Compra no débito", "Transferência enviada pelo Pix",
-    "Aplicação RDB"). Operações como Aplicação/Resgate RDB e Pagamento de
-    fatura são movimentações internas e devem ser filtradas das análises
-    de despesa. Valores negativos representam saídas; positivos, entradas.
+    "Aplicação RDB"). Valores negativos representam saídas; positivos,
+    entradas. `is_internal_transfer` marca movimentações entre contas do
+    próprio titular (pagamento da própria fatura, aplicação/resgate em RDB,
+    aportes/resgates em corretoras) — devem ser excluídas das análises de
+    despesa/receita para não distorcer a taxa real de poupança mensal.
     """
 
     __tablename__ = "transactions"
@@ -127,6 +129,9 @@ class Transaction(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     external_id: Mapped[str | None] = mapped_column(
         String(64), unique=True, default=None
+    )
+    is_internal_transfer: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True
     )
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), index=True)
     category_id: Mapped[int | None] = mapped_column(

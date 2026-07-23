@@ -67,6 +67,7 @@ class TransactionOut(BaseModel):
     category_id: int | None
     category_name: str | None
     account_name: str
+    is_internal_transfer: bool
 
 
 class TransactionPageOut(BaseModel):
@@ -100,15 +101,3 @@ class CohortCellOut(BaseModel):
     month: str
     category: str
     total: Decimal
-
-
-class CategoryShareItemOut(BaseModel):
-    category: str
-    total: Decimal
-    percentage: float
-
-
-class CategoryShareOut(BaseModel):
-    month: str | None
-    total: Decimal
-    items: list[CategoryShareItemOut]

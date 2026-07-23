@@ -76,6 +76,7 @@ async def upload_statement(
                 raw_description=t.raw_description,
                 amount=t.amount,
                 external_id=t.external_id,
+                is_internal_transfer=t.is_internal_transfer,
                 account_id=account.id,
             )
         )

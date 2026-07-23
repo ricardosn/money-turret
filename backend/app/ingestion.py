@@ -24,6 +24,7 @@ class ParsedTransaction:
     raw_description: str
     amount: Decimal
     external_id: str
+    is_internal_transfer: bool
 
 
 # Prefixos que o Nubank embute na descrição do extrato de conta corrente.
@@ -46,6 +47,64 @@ KNOWN_OPERATIONS: tuple[str, ...] = (
 
 _CHECKING_COLUMNS = {"data", "valor", "identificador", "descrição"}
 _CARD_COLUMNS = {"date", "title", "amount"}
+
+# Operações que são sempre movimentação interna (entre contas/produtos do
+# próprio titular), nunca despesa ou receita real: pagamento da própria
+# fatura, aplicação/resgate em renda fixa do próprio Nubank.
+#
+# Note: "Pagamento de boleto efetuado" NÃO entra aqui — é o prefixo genérico
+# do Nubank para qualquer boleto pago (condomínio, contas de consumo etc.),
+# a maioria despesas reais. Só a fatura do próprio cartão é interna.
+ALWAYS_INTERNAL_OPERATIONS: tuple[str, ...] = (
+    "Pagamento da fatura",
+    "Pagamento de fatura",
+    "Pagamento recebido",
+    "Aplicação RDB",
+    "Resgate RDB",
+)
+
+# Operações de transferência: só são internas quando a contraparte é uma
+# corretora/instituição de investimento conhecida (aporte ou resgate).
+_TRANSFER_OPERATIONS: frozenset[str] = frozenset(
+    {
+        "Transferência enviada",
+        "Transferência enviada pelo Pix",
+        "Transferência recebida",
+        "Transferência recebida pelo Pix",
+    }
+)
+
+# Substrings (case-insensitive) de contrapartes conhecidas de corretoras e
+# plataformas de investimento — transferências para/de essas entidades são
+# aportes ou resgates do próprio titular, não despesas ou receitas reais.
+INTERNAL_TRANSFER_COUNTERPARTIES: tuple[str, ...] = (
+    "nuinvest",
+    "nu invest",
+    "xp investimentos",
+    "rico investimentos",
+    "clear corretora",
+    "easynvest",
+    "modalmais",
+    "binance",
+    "corretora",
+    "investimentos",
+)
+
+
+def is_internal_transfer(operation: str | None, raw_description: str) -> bool:
+    """Identifica movimentações entre contas do próprio titular.
+
+    Cobre pagamento da própria fatura de cartão, aplicações/resgates em
+    RDB e transferências (Pix ou TED) para corretoras/plataformas de
+    investimento conhecidas — nenhuma delas é despesa ou receita real e
+    incluí-las distorceria a taxa de poupança mensal.
+    """
+    if operation in ALWAYS_INTERNAL_OPERATIONS:
+        return True
+    if operation in _TRANSFER_OPERATIONS:
+        lowered = raw_description.lower()
+        return any(kw in lowered for kw in INTERNAL_TRANSFER_COUNTERPARTIES)
+    return False
 
 
 def _clean(text: str) -> str:
@@ -95,6 +154,7 @@ def _parse_checking(df: pd.DataFrame) -> list[ParsedTransaction]:
                 raw_description=raw_description,
                 amount=Decimal(str(row.valor)).quantize(Decimal("0.01")),
                 external_id=_clean(str(row.identificador)),
+                is_internal_transfer=is_internal_transfer(operation, raw_description),
             )
         )
     return transactions
@@ -133,6 +193,7 @@ def _parse_card(df: pd.DataFrame) -> list[ParsedTransaction]:
                 raw_description=raw_description,
                 amount=amount,
                 external_id=external_id,
+                is_internal_transfer=is_internal_transfer(operation, raw_description),
             )
         )
     return transactions

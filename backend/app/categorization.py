@@ -8,15 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.models import CategoryRule, Transaction
 
-# Movimentações internas (não são despesa nem receita real).
-INTERNAL_OPERATIONS: tuple[str, ...] = (
-    "Aplicação RDB",
-    "Resgate RDB",
-    "Pagamento de fatura",
-    "Pagamento da fatura",
-    "Pagamento recebido",
-)
-
 
 @dataclass(frozen=True)
 class RuleRunResult:
@@ -68,8 +59,7 @@ def uncategorized_descriptions(db: Session, limit: int = 50) -> list[str]:
         select(Transaction.description)
         .where(
             Transaction.category_id.is_(None),
-            Transaction.operation.notin_(INTERNAL_OPERATIONS)
-            | Transaction.operation.is_(None),
+            Transaction.is_internal_transfer.is_(False),
         )
         .distinct()
         .limit(limit)

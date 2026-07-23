@@ -12,17 +12,23 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.categorization import INTERNAL_OPERATIONS
 from app.database import get_db
 from app.models import Category, Transaction
-from app.schemas import (
-    CategoryShareItemOut,
-    CategoryShareOut,
-    CohortCellOut,
-    MonthlyFixedVariableOut,
-)
+from app.schemas import CohortCellOut, MonthlyFixedVariableOut
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+# Categorias de "estilo de vida" acompanhadas isoladamente (sem herdar de
+# subcategorias) no gráfico de tendência, para detectar inflação do padrão
+# de vida (CLAUDE.md §4: hobbies, outdoor, restaurantes/churrascarias).
+LIFESTYLE_CATEGORY_NAMES: tuple[str, ...] = (
+    "Boardgames",
+    "Outdoor / Trilhas",
+    "Restaurantes",
+    "Churrascarias",
+    "Cantinas Italianas",
+    "Fast-food",
+)
 
 _month = func.strftime("%Y-%m", Transaction.occurred_at)
 
@@ -30,8 +36,7 @@ _month = func.strftime("%Y-%m", Transaction.occurred_at)
 def _expense_filters():
     return (
         Transaction.amount < 0,
-        Transaction.operation.notin_(INTERNAL_OPERATIONS)
-        | Transaction.operation.is_(None),
+        Transaction.is_internal_transfer.is_(False),
     )
 
 
@@ -137,49 +142,74 @@ def category_cohort(
     ]
 
 
-@router.get("/category-share", response_model=CategoryShareOut)
-def category_share(
-    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+def _month_range(start: str, end: str) -> list[str]:
+    """Lista contínua de meses ("YYYY-MM") entre start e end, inclusive."""
+    start_year, start_month = (int(p) for p in start.split("-"))
+    end_year, end_month = (int(p) for p in end.split("-"))
+    months: list[str] = []
+    year, month = start_year, start_month
+    while (year, month) <= (end_year, end_month):
+        months.append(f"{year:04d}-{month:02d}")
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return months
+
+
+@router.get("/lifestyle-trend", response_model=list[CohortCellOut])
+def lifestyle_trend(
+    months: int = Query(default=12, ge=1, le=60),
     db: Session = Depends(get_db),
-) -> CategoryShareOut:
-    """Percentual de gastos por categoria-raiz em um mês (para gráfico de pizza).
+) -> list[CohortCellOut]:
+    """Evolução mensal de categorias de estilo de vida, para identificar
+    inflação no padrão de vida (hobbies, outdoor, restaurantes, churrascarias).
 
-    Sem `month`, usa o mês mais recente com despesas. Percentuais são
-    calculados aqui no backend; o frontend só renderiza.
+    Diferente de /category-cohort, cada categoria é rastreada isoladamente
+    (sem herdar gastos de subcategorias) — Restaurantes e Churrascarias, por
+    exemplo, aparecem como séries separadas. Meses sem gasto em uma
+    categoria entram com total zero para manter a série contínua no
+    gráfico de linha.
     """
-    if month is None:
-        month = db.scalar(
-            select(_month)
-            .where(*_expense_filters())
-            .group_by(_month)
-            .order_by(_month.desc())
-            .limit(1)
-        )
-    if month is None:
-        return CategoryShareOut(month=None, total=Decimal("0"), items=[])
-
-    root_name = _root_name_resolver(db)
-    rows = db.execute(
-        select(Transaction.category_id, func.sum(-Transaction.amount))
-        .where(*_expense_filters(), _month == month)
-        .group_by(Transaction.category_id)
+    categories = db.scalars(
+        select(Category).where(Category.name.in_(LIFESTYLE_CATEGORY_NAMES))
     ).all()
+    if not categories:
+        return []
+    name_of = {c.id: c.name for c in categories}
+    ordered_names = [n for n in LIFESTYLE_CATEGORY_NAMES if n in name_of.values()]
 
-    totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-    for category_id, total in rows:
-        totals[root_name(category_id)] += Decimal(str(total or 0))
-
-    grand_total = sum(totals.values(), Decimal("0"))
-    items = [
-        CategoryShareItemOut(
-            category=category,
-            total=total.quantize(Decimal("0.01")),
-            percentage=round(float(total / grand_total * 100), 2)
-            if grand_total
-            else 0.0,
+    query = (
+        select(
+            _month.label("month"),
+            Transaction.category_id,
+            func.sum(-Transaction.amount),
         )
-        for category, total in sorted(totals.items(), key=lambda x: -x[1])
-    ]
-    return CategoryShareOut(
-        month=month, total=grand_total.quantize(Decimal("0.01")), items=items
+        .where(*_expense_filters(), Transaction.category_id.in_(name_of.keys()))
+        .group_by("month", Transaction.category_id)
     )
+    cutoff = _last_months(db, months)
+    if cutoff is not None:
+        query = query.where(_month >= cutoff)
+
+    totals: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+    seen_months: set[str] = set()
+    for month, category_id, total in db.execute(query).all():
+        totals[(month, name_of[category_id])] += Decimal(str(total or 0))
+        seen_months.add(month)
+
+    if not seen_months:
+        return []
+    all_months = _month_range(min(seen_months), max(seen_months))
+
+    return [
+        CohortCellOut(
+            month=month,
+            category=category_name,
+            total=totals.get((month, category_name), Decimal("0")).quantize(
+                Decimal("0.01")
+            ),
+        )
+        for month in all_months
+        for category_name in ordered_names
+    ]

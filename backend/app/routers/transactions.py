@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.categorization import INTERNAL_OPERATIONS, apply_rules
+from app.categorization import apply_rules
 from app.database import get_db
 from app.models import Category, CategoryRule, RuleSource, Transaction
 from app.schemas import (
@@ -72,10 +72,7 @@ def list_transactions(
     if incomes_only:
         filters.append(Transaction.amount > 0)
     if exclude_internal:
-        filters.append(
-            Transaction.operation.notin_(INTERNAL_OPERATIONS)
-            | Transaction.operation.is_(None)
-        )
+        filters.append(Transaction.is_internal_transfer.is_(False))
     if uncategorized:
         filters.append(Transaction.category_id.is_(None))
     elif category_id is not None:
@@ -119,6 +116,7 @@ def list_transactions(
                 category_id=t.category_id,
                 category_name=t.category.name if t.category else None,
                 account_name=t.account.name,
+                is_internal_transfer=t.is_internal_transfer,
             )
             for t in transactions
         ],

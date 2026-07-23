@@ -123,6 +123,16 @@ def list_transactions(
     )
 
 
+@router.delete("/transactions/{transaction_id}", status_code=204)
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)) -> None:
+    """Remove uma transação (ex: lançamento duplicado ou importado por engano)."""
+    transaction = db.get(Transaction, transaction_id)
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+    db.delete(transaction)
+    db.commit()
+
+
 @router.post("/transactions/{transaction_id}/categorize", response_model=CategorizeOut)
 def categorize_transaction(
     transaction_id: int,

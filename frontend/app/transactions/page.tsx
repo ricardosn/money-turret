@@ -14,6 +14,7 @@ import {
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from "lucide-react";
 import { buttonSecondaryClass, cardClass, inputClass, labelClass } from "@/lib/ui";
 
@@ -36,6 +37,10 @@ interface Transaction {
   amount: string;
   category_name: string | null;
   account_name: string;
+}
+
+interface ApiError {
+  detail?: string;
 }
 
 interface TransactionPage {
@@ -112,6 +117,8 @@ export default function TransactionsPage(): ReactNode {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   useEffect(() => {
     fetch(`${API_URL}/categories`)
       .then((r) => r.json() as Promise<Category[]>)
@@ -148,6 +155,35 @@ export default function TransactionsPage(): ReactNode {
   const applyFilters = () => {
     setOffset(0);
     load();
+  };
+
+  const handleDelete = async (transaction: Transaction) => {
+    const confirmed = window.confirm(
+      `Excluir a transação "${transaction.description}" de ${transaction.occurred_at} (${brl.format(Number(transaction.amount))})? Essa ação não pode ser desfeita.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(transaction.id);
+    try {
+      const res = await fetch(`${API_URL}/transactions/${transaction.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 204) {
+        const body = (await res.json().catch(() => null)) as ApiError | null;
+        throw new Error(body?.detail ?? `Falha ao excluir (HTTP ${res.status}).`);
+      }
+      setError(null);
+      // Se era o único item da página, volta uma página para não ficar vazia.
+      if (page && page.items.length === 1 && offset > 0) {
+        setOffset(Math.max(0, offset - PAGE_SIZE));
+      } else {
+        load();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível excluir a transação.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleSort = (key: SortKey) => {
@@ -317,6 +353,12 @@ export default function TransactionsPage(): ReactNode {
                     align="right"
                     onSort={handleSort}
                   />
+                  <th
+                    scope="col"
+                    className="sticky top-0 z-10 border-b border-slate-800 bg-slate-900 px-3 py-2.5 text-center font-medium text-slate-400"
+                  >
+                    <span className="sr-only">Ações</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -368,6 +410,18 @@ export default function TransactionsPage(): ReactNode {
                           )}
                           {brl.format(amount)}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(t)}
+                          disabled={deletingId === t.id}
+                          aria-label={`Excluir transação: ${t.description}`}
+                          title="Excluir transação"
+                          className="focus-ring inline-flex items-center justify-center rounded p-1 text-slate-500 transition-colors hover:bg-red-950/40 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </button>
                       </td>
                     </tr>
                   );

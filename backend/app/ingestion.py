@@ -1,19 +1,21 @@
-"""Parsing e normalização de extratos CSV do Nubank (Passo 3 do Roadmap)."""
+"""Parsing e normalização de extratos do Nubank (CSV) e do Itaú (PDF)."""
 
 import enum
 import hashlib
 import io
 import re
 from dataclasses import dataclass
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 import pandas as pd
+import pdfplumber
 
 
 class StatementKind(enum.Enum):
     CHECKING = "checking"
     CREDIT_CARD = "credit_card"
+    ITAU_CHECKING = "itau_checking"
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,105 @@ def is_internal_transfer(operation: str | None, raw_description: str) -> bool:
 
 def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+# ── Extrato de conta corrente do Itaú (PDF) ─────────────────────────────
+#
+# O texto extraído do PDF tem colunas "data | lançamentos | valor (R$) |
+# saldo (R$)" separadas visualmente por espaços múltiplos (o separador pode
+# variar entre espaços e `|`, por isso normalizamos ambos antes do regex).
+# Cada lançamento vira uma linha "DD/MM/AAAA <descrição> <valor>"; a coluna
+# de saldo só aparece nas linhas "SALDO DO DIA" (resumo do dia, não é uma
+# transação — o número que aparece nelas é a 4ª coluna, não a 3ª).
+_ITAU_LINE_RE = re.compile(r"^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?[\d.]+,\d{2})\s*$")
+_ITAU_SALDO_MARKER = "SALDO DO DIA"
+
+# Nome do titular usado nos Pix que o próprio Ricardo envia para outras
+# contas dele mesmo (ex: reserva/investimento) — mesma titularidade, não é
+# despesa real. Ajuste esta lista se o nome do titular na conta mudar.
+ITAU_SELF_TRANSFER_MARKERS: tuple[str, ...] = ("pix transf ricardo",)
+
+
+def _brl_to_decimal(raw: str) -> Decimal:
+    """Converte um valor no formato BRL ("-149,98", "4.750,69") para Decimal."""
+    cleaned = raw.strip().replace(".", "").replace(",", ".")
+    try:
+        return Decimal(cleaned).quantize(Decimal("0.01"))
+    except InvalidOperation as exc:
+        raise ValueError(f"Valor monetário inválido no extrato: {raw!r}") from exc
+
+
+def _itau_classification(raw_description: str) -> tuple[str | None, bool]:
+    """Motor de regras embutido do extrato Itaú.
+
+    Aplica duas regras sobre a descrição do lançamento: remuneração/salário
+    ganha uma operação canônica (já é receita pelo sinal positivo do
+    valor); Pix enviado para o próprio titular é marcado como transferência
+    interna, para não distorcer o cálculo de despesas.
+    """
+    if "REMUNERACAO/SALARIO" in raw_description.upper():
+        return "Remuneração/Salário", False
+    lowered = raw_description.lower()
+    if any(marker in lowered for marker in ITAU_SELF_TRANSFER_MARKERS):
+        return "Pix — transferência entre contas próprias", True
+    return None, False
+
+
+def parse_itau_pdf(file_bytes: bytes) -> list[ParsedTransaction]:
+    """Extrai transações do extrato de conta corrente do Itaú (PDF)."""
+    try:
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            lines: list[str] = []
+            for page in pdf.pages:
+                lines.extend((page.extract_text() or "").splitlines())
+    except Exception as exc:
+        raise ValueError(f"PDF inválido ou não suportado: {exc}") from exc
+
+    transactions: list[ParsedTransaction] = []
+    seen: dict[str, int] = {}
+    for line in lines:
+        normalized = _clean(line.replace("|", " "))
+        match = _ITAU_LINE_RE.match(normalized)
+        if not match:
+            continue
+
+        date_str, raw_description, value_str = match.groups()
+        raw_description = _clean(raw_description)
+        if _ITAU_SALDO_MARKER in raw_description.upper():
+            continue  # saldo do dia, não é transação
+
+        occurred_at = datetime.strptime(date_str, "%d/%m/%Y").date()
+        amount = _brl_to_decimal(value_str)
+        operation, is_internal = _itau_classification(raw_description)
+
+        # O extrato não traz identificador único; geramos um hash
+        # determinístico com contador de ocorrência (mesmo padrão da
+        # fatura de cartão) para tolerar lançamentos idênticos no dia sem
+        # quebrar a deduplicação entre re-uploads do mesmo PDF.
+        base_key = f"itau|{occurred_at.isoformat()}|{raw_description}|{amount}"
+        seen[base_key] = seen.get(base_key, 0) + 1
+        external_id = hashlib.sha1(
+            f"{base_key}|{seen[base_key]}".encode()
+        ).hexdigest()
+
+        transactions.append(
+            ParsedTransaction(
+                occurred_at=occurred_at,
+                description=raw_description,
+                operation=operation,
+                raw_description=raw_description,
+                amount=amount,
+                external_id=external_id,
+                is_internal_transfer=is_internal,
+            )
+        )
+
+    if not transactions:
+        raise ValueError(
+            "Nenhum lançamento reconhecido no PDF. Verifique se é um "
+            "extrato de conta corrente do Itaú no formato padrão."
+        )
+    return transactions
 
 
 def _split_operation(raw: str) -> tuple[str | None, str]:

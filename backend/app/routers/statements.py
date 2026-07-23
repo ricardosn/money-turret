@@ -5,16 +5,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.ingestion import StatementKind, parse_statement
+from app.ingestion import (
+    ParsedTransaction,
+    StatementKind,
+    parse_itau_pdf,
+    parse_statement,
+)
 from app.models import Account, AccountType, Transaction
 from app.schemas import StatementUploadResult
 
 router = APIRouter(prefix="/statements", tags=["statements"])
 
-_DEFAULT_ACCOUNTS: dict[StatementKind, tuple[str, AccountType]] = {
-    StatementKind.CHECKING: ("Nubank Conta", AccountType.CHECKING),
-    StatementKind.CREDIT_CARD: ("Nubank Cartão", AccountType.CREDIT_CARD),
+_DEFAULT_ACCOUNTS: dict[StatementKind, tuple[str, AccountType, str]] = {
+    StatementKind.CHECKING: ("Nubank Conta", AccountType.CHECKING, "Nubank"),
+    StatementKind.CREDIT_CARD: ("Nubank Cartão", AccountType.CREDIT_CARD, "Nubank"),
+    StatementKind.ITAU_CHECKING: ("Itaú Conta Corrente", AccountType.CHECKING, "Itaú"),
 }
+
+
+def _is_pdf(file: UploadFile) -> bool:
+    return file.content_type == "application/pdf" or (
+        file.filename or ""
+    ).lower().endswith(".pdf")
 
 
 def _resolve_account(
@@ -26,10 +38,10 @@ def _resolve_account(
             raise HTTPException(status_code=404, detail="Conta não encontrada.")
         return account
 
-    name, account_type = _DEFAULT_ACCOUNTS[kind]
+    name, account_type, institution = _DEFAULT_ACCOUNTS[kind]
     account = db.scalar(select(Account).where(Account.name == name))
     if account is None:
-        account = Account(name=name, type=account_type)
+        account = Account(name=name, type=account_type, institution=institution)
         db.add(account)
         db.flush()
     return account
@@ -41,14 +53,21 @@ async def upload_statement(
     account_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> StatementUploadResult:
-    """Importa um extrato CSV do Nubank (conta corrente ou fatura de cartão).
+    """Importa um extrato do Nubank (CSV: conta corrente ou fatura de
+    cartão) ou do Itaú (PDF: conta corrente).
 
-    Se `account_id` não for informado, usa (ou cria) uma conta padrão
-    conforme o tipo de extrato detectado.
+    O formato é roteado pelo `content_type`/extensão do arquivo. Se
+    `account_id` não for informado, usa (ou cria) uma conta padrão conforme
+    o tipo de extrato detectado.
     """
     content = await file.read()
+    parsed: list[ParsedTransaction]
     try:
-        kind, parsed = parse_statement(content)
+        if _is_pdf(file):
+            kind = StatementKind.ITAU_CHECKING
+            parsed = parse_itau_pdf(content)
+        else:
+            kind, parsed = parse_statement(content)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -21,7 +21,7 @@ import { buttonPrimaryClass, buttonSecondaryClass, cardClass } from "@/lib/ui";
 const API_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const ACCEPTED_EXTENSIONS = [".csv", ".ofx"];
+const ACCEPTED_EXTENSIONS = [".csv", ".ofx", ".pdf"];
 
 interface UploadResult {
   statement_kind: string;
@@ -37,8 +37,9 @@ interface RuleRunResult {
 }
 
 const KIND_LABEL: Record<string, string> = {
-  checking: "Extrato da conta",
-  credit_card: "Fatura do cartão",
+  checking: "Extrato da conta (Nubank)",
+  credit_card: "Fatura do cartão (Nubank)",
+  itau_checking: "Extrato da conta (Itaú, PDF)",
 };
 
 type UploadState = "idle" | "uploading" | "success" | "error";
@@ -161,8 +162,9 @@ export default function UploadPage(): ReactNode {
         </h1>
         <p className="mt-1 text-sm text-slate-400">
           Aceita o CSV da conta corrente (<code>NU_XXXXXXXX.csv</code>) ou da
-          fatura do cartão exportados no app do Nubank. O formato é detectado
-          automaticamente e re-uploads não duplicam transações.
+          fatura do cartão exportados no app do Nubank, e o PDF do extrato de
+          conta corrente do Itaú. O formato é detectado automaticamente e
+          re-uploads não duplicam transações.
         </p>
       </div>
 
@@ -185,7 +187,7 @@ export default function UploadPage(): ReactNode {
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.ofx,text/csv"
+          accept=".csv,.ofx,.pdf,text/csv,application/pdf"
           className="sr-only"
           onChange={(e) => {
             const selected = e.target.files?.[0];
@@ -228,7 +230,8 @@ export default function UploadPage(): ReactNode {
                 Arraste o arquivo aqui ou clique para selecionar
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Formatos aceitos: {ACCEPTED_EXTENSIONS.join(", ")}
+                Formatos aceitos: {ACCEPTED_EXTENSIONS.join(", ")} — extrato
+                Nubank (CSV) ou extrato de conta Itaú (PDF)
               </p>
             </div>
           </>

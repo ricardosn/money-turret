@@ -147,3 +147,53 @@ class Transaction(Base):
             f"<Transaction id={self.id} date={self.occurred_at} "
             f"amount={self.amount} desc={self.description!r}>"
         )
+
+
+class Project(Base):
+    """Projeto financeiro futuro (viagem, compra grande, evento).
+
+    Visão prospectiva de planejamento — complementar à análise retroativa
+    dos extratos: o titular define um orçamento e uma data-alvo, e distribui
+    o custo em `ProjectProvision`s por mês para diluir o impacto financeiro.
+    """
+
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(150))
+    target_date: Mapped[date] = mapped_column(Date)
+    total_budget: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    provisions: Mapped[list["ProjectProvision"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="ProjectProvision.expected_month",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Project id={self.id} title={self.title!r}>"
+
+
+class ProjectProvision(Base):
+    """Item de provisionamento de um projeto: quanto reservar e em que mês.
+
+    `expected_month` é sempre normalizado para o dia 1 do mês esperado de
+    aporte, usado para agrupar o custo do projeto na timeline mensal.
+    `is_paid` indica se o valor já foi efetivamente reservado/pago.
+    """
+
+    __tablename__ = "project_provisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    item: Mapped[str] = mapped_column(String(200))
+    estimated_value: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    expected_month: Mapped[date] = mapped_column(Date, index=True)
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    project: Mapped["Project"] = relationship(back_populates="provisions")
+
+    def __repr__(self) -> str:
+        return f"<ProjectProvision id={self.id} item={self.item!r}>"

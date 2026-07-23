@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models  # noqa: F401  (registra os modelos no metadata)
 from app.database import Base, SessionLocal, engine
 from app.ingestion import is_internal_transfer
-from app.routers import analytics, categorization, statements, transactions
+from app.routers import analytics, categorization, projects, statements, transactions
 
 
 def _backfill_internal_transfers() -> None:
@@ -96,6 +96,7 @@ app.include_router(statements.router)
 app.include_router(categorization.router)
 app.include_router(analytics.router)
 app.include_router(transactions.router)
+app.include_router(projects.router)
 
 
 @app.get("/health")

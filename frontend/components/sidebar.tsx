@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Menu,
   Receipt,
+  Rocket,
   Tags,
   Upload,
   X,
@@ -21,6 +22,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/projects", label: "Projetos", icon: Rocket },
   { href: "/transactions", label: "Transações", icon: Receipt },
   { href: "/categorize", label: "Categorização", icon: Tags },
   { href: "/upload", label: "Upload", icon: Upload },

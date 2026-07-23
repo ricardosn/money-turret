@@ -101,3 +101,61 @@ class CohortCellOut(BaseModel):
     month: str
     category: str
     total: Decimal
+
+
+class ProjectCreate(BaseModel):
+    title: str
+    target_date: date
+    total_budget: Decimal
+
+
+class ProjectUpdate(BaseModel):
+    title: str | None = None
+    target_date: date | None = None
+    total_budget: Decimal | None = None
+
+
+class ProjectProvisionCreate(BaseModel):
+    item: str
+    estimated_value: Decimal
+    expected_month: date
+    is_paid: bool = False
+
+
+class ProjectProvisionUpdate(BaseModel):
+    item: str | None = None
+    estimated_value: Decimal | None = None
+    expected_month: date | None = None
+    is_paid: bool | None = None
+
+
+class ProjectProvisionOut(BaseModel):
+    id: int
+    project_id: int
+    item: str
+    estimated_value: Decimal
+    expected_month: str
+    is_paid: bool
+
+
+class ProjectSummaryOut(BaseModel):
+    id: int
+    title: str
+    target_date: date
+    total_budget: Decimal
+    total_estimated: Decimal
+    total_provisioned: Decimal
+    progress_percentage: float
+    provisions_count: int
+
+
+class ProjectTimelineEntryOut(BaseModel):
+    month: str
+    estimated: Decimal
+    paid: Decimal
+    items: list[ProjectProvisionOut]
+
+
+class ProjectDetailOut(ProjectSummaryOut):
+    provisions: list[ProjectProvisionOut]
+    timeline: list[ProjectTimelineEntryOut]
